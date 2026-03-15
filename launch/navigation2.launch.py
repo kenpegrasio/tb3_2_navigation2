@@ -144,29 +144,18 @@ def launch_setup(context, *args, **kwargs):
     # ------------------------------------------------------------------
     # Relay nodes
     #
-    # /tf and /tf_static:
-    #   The robot hardware stack and slam_toolbox publish TF to root /tf.
-    #   Nav2 (namespaced) listens on /tb3_4/tf. These relays bridge them.
-    #
     # /map → /ns/map:
     #   slam_toolbox publishes the live occupancy grid to /map (root).
     #   Nav2's global costmap subscribes to /tb3_4/map. map_relay bridges
     #   them so the costmap updates in real time with the SLAM map.
     # ------------------------------------------------------------------
-    tf_relay = Node(
-        package='topic_tools',
-        executable='relay',
-        name='tf_relay',
-        output='screen',
-        arguments=['/tf', f'/{ns}/tf'],
-    )
 
-    tf_static_relay = Node(
+    odom_relay = Node(
         package='topic_tools',
         executable='relay',
-        name='tf_static_relay',
+        name='odom_relay',
         output='screen',
-        arguments=['/tf_static', f'/{ns}/tf_static'],
+        arguments=['/odom', f'/{ns}/odom'],
     )
 
     map_relay = Node(
@@ -200,7 +189,7 @@ def launch_setup(context, *args, **kwargs):
         }.items(),
     )
 
-    actions = [tf_relay, tf_static_relay, map_relay, nav2_include]
+    actions = [map_relay, odom_relay, nav2_include]
 
     # ------------------------------------------------------------------
     # slam_toolbox — intentionally NOT namespaced on the Node.
@@ -242,10 +231,6 @@ def launch_setup(context, *args, **kwargs):
         namespace=ns,
         arguments=['-d', rviz_config_dir],
         parameters=[{'use_sim_time': use_sim == 'true'}],
-        remappings=[
-            ('/tf',        f'/{ns}/tf'),
-            ('/tf_static', f'/{ns}/tf_static'),
-        ],
         output='screen',
     )
     actions.append(rviz_node)
