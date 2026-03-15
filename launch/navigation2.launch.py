@@ -144,11 +144,31 @@ def launch_setup(context, *args, **kwargs):
     # ------------------------------------------------------------------
     # Relay nodes
     #
+    # /tf and /tf_static:
+    #   The robot hardware stack and slam_toolbox publish TF to root /tf.
+    #   Nav2 (namespaced) listens on /tb3_4/tf. These relays bridge them.
+    #
     # /map → /ns/map:
     #   slam_toolbox publishes the live occupancy grid to /map (root).
     #   Nav2's global costmap subscribes to /tb3_4/map. map_relay bridges
     #   them so the costmap updates in real time with the SLAM map.
     # ------------------------------------------------------------------
+
+    tf_relay = Node(
+        package='topic_tools',
+        executable='relay',
+        name='tf_relay',
+        output='screen',
+        arguments=['/tf', f'/{ns}/tf'],
+    )
+
+    tf_static_relay = Node(
+        package='topic_tools',
+        executable='relay',
+        name='tf_static_relay',
+        output='screen',
+        arguments=['/tf_static', f'/{ns}/tf_static'],
+    )
 
     map_relay = Node(
         package='topic_tools',
@@ -167,6 +187,7 @@ def launch_setup(context, *args, **kwargs):
     # irrelevant during SLAM because static_layer is removed from the
     # global costmap params above.
     # ------------------------------------------------------------------
+
     nav2_include = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             [nav2_launch_file_dir, '/bringup_launch.py']
@@ -181,7 +202,7 @@ def launch_setup(context, *args, **kwargs):
         }.items(),
     )
 
-    actions = [map_relay, nav2_include]
+    actions = [tf_relay, tf_static_relay, map_relay, nav2_include]
 
     # ------------------------------------------------------------------
     # slam_toolbox — intentionally NOT namespaced on the Node.
