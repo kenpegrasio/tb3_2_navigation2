@@ -150,14 +150,6 @@ def launch_setup(context, *args, **kwargs):
     #   them so the costmap updates in real time with the SLAM map.
     # ------------------------------------------------------------------
 
-    odom_relay = Node(
-        package='topic_tools',
-        executable='relay',
-        name='odom_relay',
-        output='screen',
-        arguments=['/odom', f'/{ns}/odom'],
-    )
-
     map_relay = Node(
         package='topic_tools',
         executable='relay',
@@ -189,7 +181,7 @@ def launch_setup(context, *args, **kwargs):
         }.items(),
     )
 
-    actions = [map_relay, odom_relay, nav2_include]
+    actions = [map_relay, nav2_include]
 
     # ------------------------------------------------------------------
     # slam_toolbox — intentionally NOT namespaced on the Node.
