@@ -98,13 +98,6 @@ def rewrite_nav2_params(params_path, ns, slam_active):
                     layer['topic'] = f'/{ns}/scan'
 
     if slam_active:
-        # In SLAM mode, keep static_layer so the planner has a full map.
-        # static_layer's default map_topic is 'map' (relative), which
-        # resolves to /{ns}/map in the robot namespace — exactly where
-        # map_relay forwards slam_toolbox's live occupancy grid.
-        # map_server publishes to map_static (not map), so there is no
-        # conflict with the static pre-saved map.
-        #
         # Disable AMCL's TF broadcast to prevent it from publishing a
         # competing map→odom transform that conflicts with slam_toolbox.
         if 'amcl' in params:
@@ -114,6 +107,37 @@ def rewrite_nav2_params(params_path, ns, slam_active):
             # never activates its scan callback. Without this AMCL subscribes
             # to scan and map, wasting CPU and WiFi bandwidth.
             p['map_topic'] = 'map_amcl_disabled'
+
+        # Global costmap: remove static_layer in SLAM mode.
+        #
+        # With static_layer present, nav2_costmap_2d resizes the master
+        # costmap to match slam_toolbox's map (initially 0→5m). The robot's
+        # odom has accumulated since Pi boot (e.g. (1.21, -0.22)), placing it
+        # south of the map origin and triggering "Robot is out of bounds".
+        #
+        # Without static_layer, the costmap keeps a fixed 20m×20m size
+        # centred at the odom origin, so the robot is always inside it.
+        # The obstacle_layer handles all live scan obstacle detection.
+        # The slam map is still published to /tb3_2/map for RViz display
+        # and the map→odom TF from slam_toolbox continues to localise the robot.
+        if 'global_costmap' in params:
+            gc = (params['global_costmap']
+                  .get('global_costmap', {})
+                  .setdefault('ros__parameters', {}))
+            # Remove static_layer from plugin list
+            gc['plugins'] = [
+                pl for pl in gc.get('plugins', []) if pl != 'static_layer'
+            ]
+            gc.pop('static_layer', None)
+            # Fixed 20 m × 20 m costmap centred on the odom origin
+            gc['width'] = 20
+            gc['height'] = 20
+            gc['origin_x'] = -10.0
+            gc['origin_y'] = -10.0
+            # Keep observed walls visible for 30 s so the planner can plan
+            # around walls that are temporarily out of sensor range
+            if 'obstacle_layer' in gc:
+                gc['obstacle_layer']['observation_persistence'] = 30.0
 
     tmp = tempfile.NamedTemporaryFile(
         mode='w', suffix='.yaml', delete=False, prefix='nav2_params_rewritten_'
@@ -203,6 +227,14 @@ def launch_setup(context, *args, **kwargs):
         arguments=[f'/{ns}/map'],
     )
 
+    map_updates_relay = Node(
+        package='tb3_2_navigation2',
+        executable='map_updates_relay.py',
+        name='map_updates_relay',
+        output='screen',
+        arguments=[f'/{ns}/map_updates'],
+    )
+
     # ------------------------------------------------------------------
     # Nav2 bringup
     #
@@ -226,7 +258,7 @@ def launch_setup(context, *args, **kwargs):
         }.items(),
     )
 
-    actions = [tf_relay, tf_static_relay, map_relay, nav2_include]
+    actions = [tf_relay, tf_static_relay, map_relay, map_updates_relay, nav2_include]
 
     # ------------------------------------------------------------------
     # slam_toolbox — intentionally NOT namespaced on the Node.

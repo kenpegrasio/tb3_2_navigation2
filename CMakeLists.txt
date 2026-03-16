@@ -23,6 +23,7 @@ install(
 
 install(PROGRAMS
   scripts/map_relay.py
+  scripts/map_updates_relay.py
   scripts/tf_static_relay.py
   scripts/tf_relay.py
   DESTINATION lib/${PROJECT_NAME}
